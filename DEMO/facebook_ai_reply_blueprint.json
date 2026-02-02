@@ -1,0 +1,131 @@
+{
+  "name": "Facebook Smart Reply Loop",
+  "flow": [
+    {
+      "id": 1,
+      "module": "facebook-pages:listener",
+      "version": 1,
+      "parameters": {
+        "hook": {
+          "type": "web",
+          "label": "Page Comment Event"
+        }
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0,
+          "name": "1. Watch Comments"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "parameters": {},
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0,
+          "name": "Flow Control"
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 3,
+              "module": "openai-gpt-3:CreateChatCompletion",
+              "version": 1,
+              "parameters": {
+                "connection": "__IMT_CONN__"
+              },
+              "mapper": {
+                "model": "gpt-4o-mini",
+                "messages": [
+                  {
+                    "role": "system",
+                    "content": "You are a professional customer service assistant. Respond to the user's comment in a friendly, concise manner (under 250 characters). Do not explicitly state that you are an automated system."
+                  },
+                  {
+                    "role": "user",
+                    "content": "{{1.value.message}}"
+                  }
+                ],
+                "maxTokens": 150,
+                "temperature": 0.7
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": -50,
+                  "name": "2. Generate Response"
+                }
+              },
+              "filter": {
+                "name": "Filter: Exclude Admin Traffic",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.value.item}}",
+                      "o": "text_equals",
+                      "b": "comment"
+                    },
+                    {
+                      "a": "{{1.value.verb}}",
+                      "o": "text_equals",
+                      "b": "add"
+                    },
+                    {
+                      "a": "{{1.value.from.id}}",
+                      "o": "not_equal",
+                      "b": "{{var.page_id}}"
+                    }
+                  ]
+                ]
+              }
+            },
+            {
+              "id": 4,
+              "module": "facebook-pages:CreateAComment",
+              "version": 1,
+              "parameters": {
+                "connection": "__IMT_CONN__"
+              },
+              "mapper": {
+                "id": "{{1.value.post_id}}",
+                "message": "{{3.choices[].message.content}}",
+                "comment_id": "{{1.value.comment_id}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": -50,
+                  "name": "3. Publish Reply"
+                },
+                "errorHandler": {
+                  "response": "break",
+                  "numberOfAttempts": 3
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "name": "Facebook Smart Reply Loop",
+      "description": "Automated workflow for managing Facebook comment replies."
+    }
+  }
+}
